@@ -487,8 +487,8 @@ fn extract_gizmo_data(
 
 #[cfg(feature = "bevy_render")]
 #[derive(Component, ShaderType, Clone, Copy)]
-struct LineGizmoUniform {
-    world_from_local: [Vec4; 3],
+pub(crate) struct LineGizmoUniform {
+    pub(crate) world_from_local: [Vec4; 3],
     line_width: f32,
     depth_bias: f32,
     // Only used by gizmo line t if the current configs `line_joints` is set to `GizmoLineJoint::Round(_)`

@@ -2,7 +2,7 @@ use crate::{
     config::{GizmoLineJoint, GizmoLineStyle, GizmoMeshConfig},
     init_line_gizmo_uniform_bind_group_layout, line_gizmo_vertex_buffer_layouts,
     line_joint_gizmo_vertex_buffer_layouts, DrawLineGizmo, DrawLineJointGizmo, GizmoRenderSystems,
-    GpuLineGizmo, LineGizmoUniformBindgroupLayout, SetLineGizmoBindGroup,
+    GpuLineGizmo, LineGizmoUniform, LineGizmoUniformBindgroupLayout, SetLineGizmoBindGroup,
 };
 use bevy_app::{App, Plugin};
 use bevy_asset::{load_embedded_asset, AssetServer, Handle};
@@ -20,6 +20,7 @@ use bevy_ecs::{
     schedule::IntoScheduleConfigs,
     system::{Commands, Query, Res, ResMut},
 };
+use bevy_math::Vec3;
 use bevy_image::BevyDefault as _;
 use bevy_pbr::{MeshPipeline, MeshPipelineKey, SetMeshViewBindGroup};
 use bevy_render::{
@@ -276,7 +277,7 @@ fn queue_line_gizmos_3d(
     pipeline: Res<LineGizmoPipeline>,
     mut pipelines: ResMut<SpecializedRenderPipelines<LineGizmoPipeline>>,
     pipeline_cache: Res<PipelineCache>,
-    line_gizmos: Query<(Entity, &MainEntity, &GizmoMeshConfig)>,
+    line_gizmos: Query<(Entity, &MainEntity, &GizmoMeshConfig, &LineGizmoUniform)>,
     line_gizmo_assets: Res<RenderAssets<GpuLineGizmo>>,
     mut transparent_render_phases: ResMut<ViewSortedRenderPhases<Transparent3d>>,
     views: Query<(
@@ -335,7 +336,9 @@ fn queue_line_gizmos_3d(
             view_key |= MeshPipelineKey::OIT_ENABLED;
         }
 
-        for (entity, main_entity, config) in &line_gizmos {
+        let rangefinder = view.rangefinder3d();
+
+        for (entity, main_entity, config, uniform) in &line_gizmos {
             if !config.render_layers.intersects(render_layers) {
                 continue;
             }
@@ -343,6 +346,14 @@ fn queue_line_gizmos_3d(
             let Some(line_gizmo) = line_gizmo_assets.get(&config.handle) else {
                 continue;
             };
+
+            // Extract translation from the world_from_local affine matrix
+            let translation = Vec3::new(
+                uniform.world_from_local[0].w,
+                uniform.world_from_local[1].w,
+                uniform.world_from_local[2].w,
+            );
+            let distance = rangefinder.distance_translation(&translation);
 
             if line_gizmo.list_vertex_count > 0 {
                 let pipeline = pipelines.specialize(
@@ -359,7 +370,7 @@ fn queue_line_gizmos_3d(
                     entity: (entity, *main_entity),
                     draw_function,
                     pipeline,
-                    distance: 0.,
+                    distance,
                     batch_range: 0..1,
                     extra_index: PhaseItemExtraIndex::None,
                     indexed: true,
@@ -381,7 +392,7 @@ fn queue_line_gizmos_3d(
                     entity: (entity, *main_entity),
                     draw_function: draw_function_strip,
                     pipeline,
-                    distance: 0.,
+                    distance,
                     batch_range: 0..1,
                     extra_index: PhaseItemExtraIndex::None,
                     indexed: true,
@@ -396,7 +407,7 @@ fn queue_line_joint_gizmos_3d(
     pipeline: Res<LineJointGizmoPipeline>,
     mut pipelines: ResMut<SpecializedRenderPipelines<LineJointGizmoPipeline>>,
     pipeline_cache: Res<PipelineCache>,
-    line_gizmos: Query<(Entity, &MainEntity, &GizmoMeshConfig)>,
+    line_gizmos: Query<(Entity, &MainEntity, &GizmoMeshConfig, &LineGizmoUniform)>,
     line_gizmo_assets: Res<RenderAssets<GpuLineGizmo>>,
     mut transparent_render_phases: ResMut<ViewSortedRenderPhases<Transparent3d>>,
     views: Query<(
@@ -449,7 +460,9 @@ fn queue_line_joint_gizmos_3d(
             view_key |= MeshPipelineKey::DEFERRED_PREPASS;
         }
 
-        for (entity, main_entity, config) in &line_gizmos {
+        let rangefinder = view.rangefinder3d();
+
+        for (entity, main_entity, config, uniform) in &line_gizmos {
             if !config.render_layers.intersects(render_layers) {
                 continue;
             }
@@ -461,6 +474,14 @@ fn queue_line_joint_gizmos_3d(
             if line_gizmo.strip_vertex_count < 3 || config.line_joints == GizmoLineJoint::None {
                 continue;
             }
+
+            // Extract translation from the world_from_local affine matrix
+            let translation = Vec3::new(
+                uniform.world_from_local[0].w,
+                uniform.world_from_local[1].w,
+                uniform.world_from_local[2].w,
+            );
+            let distance = rangefinder.distance_translation(&translation);
 
             let pipeline = pipelines.specialize(
                 &pipeline_cache,
@@ -476,7 +497,7 @@ fn queue_line_joint_gizmos_3d(
                 entity: (entity, *main_entity),
                 draw_function,
                 pipeline,
-                distance: 0.,
+                distance,
                 batch_range: 0..1,
                 extra_index: PhaseItemExtraIndex::None,
                 indexed: true,
